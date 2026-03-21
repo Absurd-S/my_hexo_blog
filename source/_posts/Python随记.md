@@ -1,7 +1,8 @@
 ---
 title: Python随记
 date: 2025-11-02
-tags: [Python]
+tags: [Python,学习笔记]
+categories: [Python]
 ---
 
 ## 第一章 基础
