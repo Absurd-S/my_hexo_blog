@@ -1,0 +1,4 @@
+- name: 示例友链
+  link: https://example.com
+  avatar: https://example.com/avatar.jpg
+  descr: 一个有趣的博客

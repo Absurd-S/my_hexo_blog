@@ -1,0 +1,26 @@
+# Hexo generated output
+/public/
+
+# Dependencies
+/node_modules/
+
+# Hexo cache
+db.json
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Theme author CI (only relevant in theme's own repo)
+themes/butterfly/.github/
+
+# Sensitive / local-only config
+.env
+.env.local

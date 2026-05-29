@@ -1,0 +1,55 @@
+/* ===== Post Card Glass Effect ===== */
+.layout > #post {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(158, 204, 171, 0.12);
+}
+
+@supports (backdrop-filter: blur(10px)) {
+    .layout > #post {
+        background: rgba(255, 255, 255, 0.72) !important;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+}
+
+/* ===== Index Post Cards ===== */
+.recent-post-item {
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.recent-post-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(158, 204, 171, 0.18);
+}
+
+/* ===== Code Block Styling ===== */
+figure.highlight {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* ===== TOC Refinement ===== */
+.toc-link {
+    transition: color 0.15s ease;
+}
+
+/* ===== Custom Scrollbar (Webkit) ===== */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #9eccab;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #7cb892;
+}
