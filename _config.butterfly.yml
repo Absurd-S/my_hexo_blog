@@ -45,7 +45,7 @@ code_blocks:
   copy: true
   language: true
   # true: shrink the code blocks | false: expand the code blocks | none: expand code blocks and hide the button
-  shrink: true
+  shrink: false
   fullpage: false
 
 # Social media links
@@ -53,7 +53,6 @@ code_blocks:
 #   icon: link || the description || color
 social:
   fab fa-github: https://github.com/Absurd-S/ || Github || '#24292e'
-  fas fa-envelope: mailto:2105667136@qq.com || Email || '#4a7dbe'
 
 # --------------------------------------
 # Image Settings

@@ -79,6 +79,15 @@ figure.highlight pre {
     background: #7cb892;
 }
 
+/* ===== Disable Avatar & Icon Rotation ===== */
+.avatar-img img:hover {
+    transform: none !important;
+}
+
+.card-info-social-icons i:hover {
+    transform: none !important;
+}
+
 /* ===== About Page ===== */
 .about-profile {
     display: flex;
