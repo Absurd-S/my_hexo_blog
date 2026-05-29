@@ -120,5 +120,4 @@ description: 关于 AbsurdZZ 的个人介绍
 
 <div class="about-links">
 {% btn https://github.com/Absurd-S/,GitHub,fab fa-github,outline %}
-{% btn mailto:2105667136@qq.com,Email,fas fa-envelope,outline %}
 </div>
