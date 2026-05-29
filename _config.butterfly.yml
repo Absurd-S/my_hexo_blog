@@ -899,7 +899,7 @@ font:
   global_font_size: 16px
   code_font_size:
   font_family: "'LXGW WenKai Screen', sans-serif"
-  code_font_family: "'Fira Code', 'Ubuntu Mono', monospace"
+  code_font_family: "'JetBrains Mono', 'Fira Code', 'Ubuntu Mono', monospace"
 
 # Font settings for the site title and site subtitle
 blog_title_font:
@@ -1135,6 +1135,7 @@ css_prefix: true
 inject:
   head:
     - <link rel="stylesheet" href="https://npm.elemecdn.com/lxgw-wenkai-screen-webfont/style.css" media="print" onload="this.media='all'">
+    - <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap">
     - <link rel="stylesheet" href="/css/custom.css">
     
   bottom:
