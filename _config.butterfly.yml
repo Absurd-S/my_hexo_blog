@@ -29,67 +29,7 @@ menu:
   友链: /friends/ || fas fa-link
   图库: /gallery/ || fas fa-images
   关于: /about/ || fas fa-user
-  说说: /shuoshuo/ || fas fa-comments
-
-
-
-about:
-  enable: true
-  fullpage: false # 如果你想让页面像 PPT 一样全屏滚动，可以设为 true
-  # 顶部个人信息
-  profile:
-    avatar: /images/headphoto.webp # 换成你的头像路径
-    author: AbsurdZZ
-    description: 一个不萌但新的萌新
-
-    # 标签云
-  tags:
-    - 摄影
-    - 手工
-    - 单机
-    - 极简主义
-    - 夜猫子
-    - 多国时区作息
-  
-  # 技能进度条
-  skills:
-    - name: Python
-      score: 70
-      color: "#3776ab"
-      icon: fab fa-python
-    - name: Vue3
-      score: 20
-      color: "#41b883"
-      icon: fab fa-vuejs
-    - name: SQL
-      score: 20
-      color: "#f29111"
-      icon: fas fa-database
-    - name: 前端
-      score: 50
-      color: "#f89820"
-      icon: fas fa-code
-
-  # 简单时间轴
-  career:
-    - time: 2026-03
-      title: 搭建博客
-      desc: 写点东西，记录一些个人的思考和学习经历。
-    - time: 2026-02
-      title: 学习Vue3
-      desc: 正在努力学习 Vue3 的语法基础。
-  # 游戏
-  game:
-    - name: 艾尔登法环
-      image: /img/elden_ring.jpg # 建议放一张精美的游戏海报
-      platform: Steam # 也可以是 PS5, Switch 等
-      score: 10 # 满分 10 分
-    - name: 塞尔达传说：荒野之息
-      image: /img/zelda.jpg
-      platform: Switch
-      score: 10
-
-# --------------------------------------
+  说说: /shuoshuo/ || fas fa-comments# --------------------------------------
 # Code Blocks Settings
 # --------------------------------------
 
