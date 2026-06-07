@@ -26,10 +26,8 @@ menu:
   归档: /archives/ || fas fa-archive
   标签: /tags/ || fas fa-tags
   分类: /categories/ || fas fa-folder
-  友链: /friends/ || fas fa-link
   图库: /gallery/ || fas fa-images
-  关于: /about/ || fas fa-user
-  说说: /shuoshuo/ || fas fa-comments# --------------------------------------
+  关于: /about/ || fas fa-user# --------------------------------------
 # Code Blocks Settings
 # --------------------------------------
 
