@@ -771,21 +771,21 @@ site_verification:
 
 theme_color:
   enable: true
-  main: "#9eccab"
-  paginator: "#7cb892"
-  button_hover: "#e8a87c"
-  text_selection: "#9eccab"
-  link_color: "#6ba882"
-  meta_color: "#8fa89a"
-  hr_color: "#b8d9c5"
-  code_foreground: "#e07b6c"
-  code_background: "rgba(158, 204, 171, .08)"
-  toc_color: "#7cb892"
-  blockquote_padding_color: "#9eccab"
-  blockquote_background_color: "#9eccab"
-  scrollbar_color: "#9eccab"
-  meta_theme_color_light: "#f5faf7"
-  meta_theme_color_dark: "#1a2a20"
+  main: "#2F6B5A"
+  paginator: "#3d806b"
+  button_hover: "#d4a373"
+  text_selection: "#2F6B5A"
+  link_color: "#2F6B5A"
+  meta_color: "#7a8e85"
+  hr_color: "#c7dbd0"
+  code_foreground: "#c75a4a"
+  code_background: "rgba(47, 107, 90, .06)"
+  toc_color: "#3d806b"
+  blockquote_padding_color: "#2F6B5A"
+  blockquote_background_color: "#F8F5EE"
+  scrollbar_color: "#2F6B5A"
+  meta_theme_color_light: "#F8F5EE"
+  meta_theme_color_dark: "#243447"
 
 # The user interface setting of category and tag page
 # Choose: index - same as Homepage UI / default - same as archives UI
