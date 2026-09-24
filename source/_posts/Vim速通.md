@@ -2,6 +2,7 @@
 title: Vim速通
 date: 2026-09-20 20:55:18
 tags: [Vim]
+cover: /images/cover/cover-vim.webp
 ---
 
 > 面向人群：需要频繁修改服务器配置、编写技术文档/代码的开发者

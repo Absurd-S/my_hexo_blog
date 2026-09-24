@@ -3,6 +3,7 @@ title: Python随记
 date: 2025-11-02
 tags: [Python,学习笔记]
 categories: [Python]
+cover: /images/cover/cover-python.webp
 ---
 
 ## 第一章 基础

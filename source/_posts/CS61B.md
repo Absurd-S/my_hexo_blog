@@ -2,6 +2,7 @@
 title: CS61B
 date: 2026-09-17 18:10:32
 tags: [数据结构,Java,教程]
+cover: /images/cover/cover-cs61b.webp
 ---
 
 ## Lecture 3
