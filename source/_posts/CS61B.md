@@ -4,8 +4,6 @@ date: 2026-09-17 18:10:32
 tags: [数据结构,Java,教程]
 ---
 
-# CS61B
-
 ## Lecture 3
 
 ### Lists
