@@ -27,6 +27,7 @@ menu:
   标签: /tags/ || fas fa-tags
   分类: /categories/ || fas fa-folder
   图库: /gallery/ || fas fa-images
+  广场: /playground/ || fas fa-gamepad
   关于: /about/ || fas fa-user# --------------------------------------
 # Code Blocks Settings
 # --------------------------------------
