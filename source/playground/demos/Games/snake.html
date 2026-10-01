@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#030805">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="贪吃蛇 · CRT 街机绿磷光终端，单文件 H5">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='10' fill='%23030805'/><rect x='4' y='4' width='56' height='56' rx='7' fill='none' stroke='%2339e344' stroke-opacity='.28'/><rect x='10' y='12' width='13' height='13' fill='%2339e344' fill-opacity='.95'/><rect x='25' y='12' width='13' height='13' fill='%2331c53b' fill-opacity='.85'/><rect x='25' y='27' width='13' height='13' fill='%232bab34' fill-opacity='.7'/><rect x='10' y='27' width='13' height='13' fill='%23238d2b' fill-opacity='.55'/><rect x='41' y='41' width='13' height='13' fill='%23ff3b1f'/><rect x='8' y='8' width='48' height='2' fill='%23000' fill-opacity='.35'/><rect x='8' y='15' width='48' height='2' fill='%23000' fill-opacity='.35'/><rect x='8' y='22' width='48' height='2' fill='%23000' fill-opacity='.35'/><rect x='8' y='29' width='48' height='2' fill='%23000' fill-opacity='.35'/><rect x='8' y='36' width='48' height='2' fill='%23000' fill-opacity='.35'/><rect x='8' y='43' width='48' height='2' fill='%23000' fill-opacity='.35'/><rect x='8' y='50' width='48' height='2' fill='%23000' fill-opacity='.35'/></svg>">
+<title>贪吃蛇 · BLOCKADE 1976</title>
+<style>
+/* ============================================================
+   贪吃蛇 — 单文件 H5
+   视觉：CRT 街机绿磷光终端
+   贪吃蛇 1976 年就是为街机 Blockade 生的，CRT 显像管是它的原生物质。
+   绿屏是单色的 —— 于是「长度」这条刻度天然落在一根亮度轴上：
+   越吃越长 = 磷光越亮，直到 L40 烧成过曝白。
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  /* 屏幕熄灭时的绿黑，不是纯黑 —— 磷光屏的环境光偏色 */
+  --ink:      #030805;
+  --ink-2:    #07120a;
+  --cabinet:  #09180e;
+  --cabinet-2:#102517;
+
+  --green-dim: #1f5e28;
+  --green:     #39e344;   /* P1 磷光街机绿 */
+  --green-hi:  #8bf26a;
+  --green-hot: #d5ffd5;   /* 过曝 */
+  --red:       #ff3b1f;   /* 食物：绿屏是单色的，只能靠色相拉开 */
+
+  --line:      rgba(57, 227, 68, .22);
+  --line-soft: rgba(57, 227, 68, .13);
+  --line-faint:rgba(57, 227, 68, .10);
+
+  --fg:      var(--green-hi);
+  --fg-dim:  rgba(57, 227, 68, .64);
+  --fg-faint:rgba(57, 227, 68, .42);
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", system-ui, sans-serif;
+
+  --radius: 3px;
+  --ease-out: cubic-bezier(.22, .68, .32, 1);
+  --ease-snap: cubic-bezier(.34, 1.32, .48, 1);
+
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+
+  /* 7 段数码管的斜切端点 */
+  --seg-h: polygon(20% 0, 80% 0, 100% 50%, 80% 100%, 20% 100%, 0 50%);
+  --seg-v: polygon(0 20%, 50% 0, 100% 20%, 100% 80%, 50% 100%, 0 80%);
+}
+
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+
+body {
+  font-family: var(--sans);
+  color: var(--fg);
+  background-color: var(--ink);
+  background-image:
+    radial-gradient(128% 84% at 50% -20%, #0c2412 0%, rgba(12, 36, 18, 0) 60%),
+    radial-gradient(92% 62% at 8% 110%, #0a1e0f 0%, rgba(10, 30, 15, 0) 68%),
+    linear-gradient(178deg, #071109 0%, #030805 100%);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* ---------- CRT 物理层：扫描线 + 暗角 + 玻璃反光 + 电源纹波 ----------
+   盖在最上层且不吃事件：它是这台显示器的物理属性，不属于界面。 */
+
+.crt {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  background:
+    /* 玻璃斜向反光 */
+    linear-gradient(152deg, rgba(214, 255, 220, .05) 0%, rgba(214, 255, 220, .012) 26%, transparent 44%),
+    /* 显像管暗角 */
+    radial-gradient(135% 112% at 50% 48%, transparent 58%, rgba(0, 0, 0, .42) 100%),
+    /* 扫描线 —— 周期必须够粗：格子只有 ~26px，3px 周期会把方块边界切碎成百叶窗。
+       4px 周期 + 低占比，看起来才像一条光栅，而不是一层脏。 */
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, .22) 0 1px, rgba(0, 0, 0, 0) 1px 4px);
+}
+/* 电源纹波：真 60Hz 在屏幕上只会看见频闪，这里用 4.2s 的 1.5% 幅度暗示 */
+.crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  animation: ripple 4.2s ease-in-out infinite;
+}
+@keyframes ripple {
+  0%, 100% { opacity: 0; }
+  46%      { opacity: .015; }
+  52%      { opacity: .008; }
+}
+
+/* ---------- 整屏布局 ---------- */
+
+.shell {
+  height: 100vh;
+  height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(var(--safe-t) + 12px) 14px calc(var(--safe-b) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---------- 机箱面板 ----------
+   不是 macOS 窗口，是一台机器的丝印面板：电源灯 + 型号 + 仪表 */
+
+.machine {
+  flex: none;
+  padding: 9px 12px 10px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #13291a, #0a170e);
+  border: 1px solid var(--line-soft);
+  box-shadow:
+    0 1px 0 rgba(57, 227, 68, .12) inset,
+    0 -1px 0 rgba(0, 0, 0, .6) inset,
+    0 12px 28px -18px rgba(0, 0, 0, .9);
+}
+
+.machine__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lamp {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex: none;
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(57, 227, 68, .8), 0 0 18px rgba(57, 227, 68, .4);
+  animation: lamp 3.2s ease-in-out infinite;
+}
+@keyframes lamp { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+/* 待机 → 暗；运行 → 常亮；结束 → 红 */
+.machine[data-state="ready"] .lamp { background: var(--green-dim); box-shadow: none; animation: none; }
+.machine[data-state="over"]  .lamp { background: var(--red); box-shadow: 0 0 8px rgba(255,59,31,.9), 0 0 20px rgba(255,59,31,.5); animation: none; }
+
+.title {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: .24em;
+  color: var(--green-hi);
+  text-shadow: 0 0 6px rgba(57, 227, 68, .55), 0 0 22px rgba(57, 227, 68, .28);
+  font-variant-numeric: tabular-nums;
+}
+.subtitle {
+  margin: 4px 0 0;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.stamp {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: .22em;
+  color: rgba(57, 227, 68, .28);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ---------- 仪表：自绘 7 段数码管 ----------
+   零外部请求，所以点阵字不能引字体 —— 这 7 段是纯 CSS 斜切块自己拼的。
+   熄灭的段也留 8% 亮度：真实数码管熄掉的段是看得见的。 */
+
+.gauges { display: flex; gap: 12px; flex: none; }
+.gauge { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.gauge__k {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: .2em;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+}
+
+.nixie { display: inline-flex; gap: .14em; height: 26px; }
+.n7 { position: relative; width: .56em; height: 1em; }
+.n7__s {
+  position: absolute;
+  background: var(--green);
+  opacity: .08;
+}
+.n7__s.on {
+  opacity: 1;
+  box-shadow: 0 0 .18em rgba(57, 227, 68, .95), 0 0 .5em rgba(57, 227, 68, .45);
+}
+.n7__s--a { left: 15%; right: 15%; top: 0;    height: 8%;  clip-path: var(--seg-h); }
+.n7__s--g { left: 15%; right: 15%; top: 46%;   height: 8%;  clip-path: var(--seg-h); }
+.n7__s--d { left: 15%; right: 15%; top: 92%;   height: 8%;  clip-path: var(--seg-h); }
+.n7__s--f { left: 0;    top: 3%;              width: 9%;  height: 41%; clip-path: var(--seg-v); }
+.n7__s--b { right: 0;   top: 3%;              width: 9%;  height: 41%; clip-path: var(--seg-v); }
+.n7__s--e { left: 0;    top: 56%;             width: 9%;  height: 41%; clip-path: var(--seg-v); }
+.n7__s--c { right: 0;   top: 56%;             width: 9%;  height: 41%; clip-path: var(--seg-v); }
+.nixie--hot .n7__s.on { background: var(--green-hot); }
+.nixie--hot .n7__s { background: var(--green-hot); }
+
+@keyframes tick { 0% { transform: scale(1); } 40% { transform: scale(1.1); } 100% { transform: scale(1); } }
+.gauge--bump .nixie { animation: tick 240ms var(--ease-snap); }
+
+/* ---------- 屏幕 ---------- */
+
+.stage { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; }
+
+.board {
+  --n: 14;
+  --pad: clamp(3px, 1.05vmin, 5px);
+  --board: 320px;
+  --cell: calc((var(--board) - var(--pad) * (var(--n) + 1)) / var(--n));
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;                       /* 显像管的圆角 */
+  overflow: hidden;
+  background: #030a04;
+  border: 1px solid var(--line-soft);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .9),
+    0 0 0 2px rgba(57, 227, 68, .07),
+    0 0 34px -6px rgba(60, 220, 80, .18),
+    inset 0 0 40px -8px rgba(0, 0, 0, .95);
+  touch-action: none;
+}
+@supports (width: 1cqh) {
+  .stage { container-type: size; }
+  .board {
+    --board: min(100cqw, 100cqh);
+    width: var(--board);
+    height: var(--board);
+    aspect-ratio: auto;
+    max-width: none;
+    max-height: none;
+  }
+}
+
+/* 网格线：整体用 repeating-gradient 画，不为每格留 DOM */
+.grid {
+  position: absolute;
+  inset: var(--pad);
+  background-image:
+    repeating-linear-gradient(90deg, var(--line-faint) 0 1px, transparent 1px var(--cell)),
+    repeating-linear-gradient(0deg, var(--line-faint) 0 1px, transparent 1px var(--cell));
+}
+
+.items { position: absolute; inset: 0; z-index: 2; }
+
+.seg, .food, .ghost, .burst {
+  position: absolute;
+  top: 0; left: 0;
+  width: var(--cell);
+  height: var(--cell);
+  transform: translate(calc(var(--pad) + var(--x) * (var(--cell) + var(--pad))),
+                       calc(var(--pad) + var(--y) * (var(--cell) + var(--pad))));
+}
+
+/* ---------- 蛇身 ----------
+   没有补间：整条蛇瞬移。贪吃蛇是实时的，任何 128ms 级动画都会变成输入延迟。
+   发光体的衰减用径向渐变（中心亮、边缘暗），而不是 2048 那道斜向柔光。
+   底板只留静态网格线，不留任何走过痕迹 —— 蛇爬过的地方要能立刻沉回背景，
+   否则整盘会积起一层脏，反而找不到蛇在哪。 */
+
+.seg__face {
+  position: absolute;
+  inset: 0;
+  border-radius: calc(var(--cell) * .10);
+  background: radial-gradient(circle at 50% 42%, var(--seg-hi) 0%, var(--seg-bg) 72%);
+  color: var(--seg-fg);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .55),
+    inset 0 0 calc(var(--cell) * .34) rgba(220, 255, 225, .13),
+    0 0 calc(var(--cell) * .34) calc(var(--cell) * -.20) rgba(0, 0, 0, .6);
+}
+
+/* 蛇头：画面唯一的强焦点 —— 亮轮廓 + 外发光 + 磷光过载呼吸 */
+.seg--head .seg__face {
+  box-shadow:
+    0 0 0 1px rgba(226, 255, 230, .40),          /* 亮描边：把头从身体里拔出来 */
+    inset 0 0 calc(var(--cell) * .40) rgba(230, 255, 235, .26),
+    0 0 calc(var(--cell) * .60) calc(var(--cell) * -.10) var(--seg-glow),
+    0 0 calc(var(--cell) * 1.5) calc(var(--cell) * -.35) var(--seg-glow);
+  animation: burn 3.4s ease-in-out infinite;
+}
+@keyframes burn {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.10); }
+}
+
+/* 蛇眼：两粒深色方块，落在行进方向那一侧。
+   这是贪吃蛇最强的方向辨识信号 —— 玩家扫一眼棋盘就知道蛇往哪爬。 */
+.seg__eyes {
+  position: absolute;
+  z-index: 1;
+  inset: 20%;
+  display: none;            /* 元素池里每节都带着眼睛结构，只有蛇头能点亮 */
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 24%;
+}
+.seg--head .seg__eyes { display: grid; }
+.seg__eyes i {
+  background: #04150a;
+  border-radius: 20%;
+  box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .16);
+}
+.seg--head[data-dir="right"] .seg__eyes i:nth-child(1) { grid-area: 1 / 2; }
+.seg--head[data-dir="right"] .seg__eyes i:nth-child(2) { grid-area: 2 / 2; }
+.seg--head[data-dir="left"]  .seg__eyes i:nth-child(1) { grid-area: 1 / 1; }
+.seg--head[data-dir="left"]  .seg__eyes i:nth-child(2) { grid-area: 2 / 1; }
+.seg--head[data-dir="up"]    .seg__eyes i:nth-child(1) { grid-area: 1 / 1; }
+.seg--head[data-dir="up"]    .seg__eyes i:nth-child(2) { grid-area: 1 / 2; }
+.seg--head[data-dir="down"]  .seg__eyes i:nth-child(1) { grid-area: 2 / 1; }
+.seg--head[data-dir="down"]  .seg__eyes i:nth-child(2) { grid-area: 2 / 2; }
+
+/* 右上角技术标注：呼应 2048 的 2¹¹ 幂次角标，终端里则是位号。
+   它会躲到蛇头的「后方」去 —— 眼睛占前方，角标占后方，两者永不抢同一个角落。 */
+.seg__tag {
+  position: absolute;
+  z-index: 1;
+  top: 8%;
+  right: 9%;
+  display: none;
+  font-family: var(--mono);
+  font-size: calc(var(--cell) * .30);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -.04em;
+  color: var(--ink);
+  opacity: .5;
+  font-variant-numeric: tabular-nums;
+}
+.seg--head .seg__tag { display: block; }
+/* 眼在前方、标在后方：两个方向各让一半，四个朝向都不会同框挤在一起。
+   眼左 / 眼下时右上角都空着，所以这两条共用右上角。 */
+.seg--head[data-dir="right"] .seg__tag { top: 8%;    bottom: auto; left: 9%;  right: auto; }
+.seg--head[data-dir="left"]  .seg__tag { top: 8%;    bottom: auto; right: 9%; left: auto; }
+.seg--head[data-dir="down"]  .seg__tag { top: 8%;    bottom: auto; right: 9%; left: auto; }
+.seg--head[data-dir="up"]    .seg__tag { bottom: 8%; top: auto;    right: 9%; left: auto; }
+
+/* 尾巴回收：60ms 极短淡出，够读到「这里少了一节」又不拖慢手感 */
+.ghost { z-index: 1; pointer-events: none; }
+.ghost__face {
+  position: absolute; inset: 0;
+  border-radius: calc(var(--cell) * .10);
+  background: var(--ghost-bg, rgba(57, 227, 68, .3));
+  opacity: 0;
+}
+.ghost--on .ghost__face { animation: ghostOut 60ms linear both; }
+@keyframes ghostOut { from { opacity: .45; } to { opacity: 0; } }
+
+/* ---------- 食物 ----------
+   和蛇身同形（方块），但缩进一档、辉光更强，再叠上红/绿色相差。
+   绿屏物理上做不出红色，所以这块屏被有意做成红绿双色街机。
+   代价要说清楚：红绿对色觉障碍用户不友好 —— 因此形状（略小的方块）
+   和亮度（更强的外发光）都做了二次区分，不是只靠色相。 */
+
+.food { z-index: 3; }
+.food__face {
+  position: absolute;
+  inset: calc(var(--cell) * .08);
+  border-radius: calc(var(--cell) * .10);
+  background: radial-gradient(circle at 50% 42%, #ff7a5c 0%, var(--red) 74%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .55),
+    inset 0 0 calc(var(--cell) * .40) rgba(255, 210, 195, .30),
+    0 0 calc(var(--cell) * .70) calc(var(--cell) * -.10) rgba(255, 59, 31, .9),
+    0 0 calc(var(--cell) * 1.5) calc(var(--cell) * -.35) rgba(255, 59, 31, .5);
+  /* 呼吸相位与蛇头错开半拍，两个光斑不共振。幅度刻意压到 1.10 —— 再大就开始"闪"了。 */
+  animation: burn 3.4s ease-in-out infinite 1.7s;
+}
+.food--in { animation: popIn 180ms var(--ease-snap) both; }
+@keyframes popIn { from { scale: .3; opacity: 0; } to { scale: 1; opacity: 1; } }
+
+.burst { z-index: 4; pointer-events: none; opacity: 0; }
+.burst__ring {
+  position: absolute; inset: 6%;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 110, 70, .9);
+  opacity: 0;
+}
+.burst--on .burst__ring { animation: burst 240ms var(--ease-out) both; }
+@keyframes burst {
+  from { transform: scale(.45); opacity: .95; }
+  to   { transform: scale(1.9); opacity: 0; }
+}
+
+/* ---------- 终端弹层 ----------
+   不是玻璃卡片，是 DOS 那种双线描边的对话框。 */
+
+.veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(2, 8, 4, .80);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 220ms var(--ease-out), visibility 220ms;
+  z-index: 5;
+}
+.veil--on { opacity: 1; visibility: visible; }
+
+.veil__card {
+  width: 100%;
+  max-width: 296px;
+  padding: 16px 16px 14px;
+  text-align: center;
+  border-radius: var(--radius);
+  background: #050d06;
+  border: 1px solid var(--line);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .9),
+    inset 0 0 0 3px #050d06,
+    inset 0 0 0 4px rgba(57, 227, 68, .16),
+    0 0 40px -10px rgba(60, 220, 80, .25);
+  transform: translateY(10px) scale(.97);
+  transition: transform 240ms var(--ease-snap);
+}
+.veil--on .veil__card { transform: none; }
+
+.veil__kicker {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .2em;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+}
+.veil__title {
+  margin: 8px 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--green-hi);
+  text-shadow: 0 0 14px rgba(57, 227, 68, .5);
+}
+.veil__text { margin: 0 0 14px; font-size: 13px; line-height: 1.7; color: var(--fg-dim); }
+.veil__text b {
+  color: var(--green-hot);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
+  text-shadow: 0 0 10px rgba(57, 227, 68, .6);
+}
+.veil__actions { display: flex; gap: 8px; }
+
+.veil--hint .veil__card { background: none; border: none; box-shadow: none; max-width: 250px; }
+.veil--hint .veil__title { font-size: 18px; }
+.swipe-glyph { display: flex; justify-content: center; gap: 5px; margin-bottom: 12px; }
+.swipe-glyph i {
+  width: 26px; height: 26px; border-radius: 2px;
+  border: 1px solid var(--line);
+  display: grid; place-items: center;
+  font-style: normal; font-size: 11px; color: var(--fg-dim);
+  font-family: var(--mono);
+}
+
+/* ---------- 实体按键 ----------
+   凸起外壳 + 下沉行程，不是玻璃胶囊。 */
+
+.btn {
+  flex: 1;
+  appearance: none;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #16301d, #0b1a10);
+  box-shadow:
+    0 1px 0 rgba(57, 227, 68, .14) inset,
+    0 -2px 0 rgba(0, 0, 0, .55) inset,
+    0 2px 0 rgba(0, 0, 0, .7),
+    0 4px 10px -6px rgba(0, 0, 0, .8);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 11px 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 70ms var(--ease-out), box-shadow 70ms, background 120ms;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 rgba(57, 227, 68, .12) inset,
+    0 -1px 0 rgba(0, 0, 0, .5) inset,
+    0 0 0 rgba(0, 0, 0, .7),
+    0 1px 3px -2px rgba(0, 0, 0, .8);
+}
+.btn:disabled { opacity: .3; cursor: default; }
+.btn:disabled:active { transform: none; box-shadow: 0 1px 0 rgba(57,227,68,.14) inset, 0 -2px 0 rgba(0,0,0,.55) inset, 0 2px 0 rgba(0,0,0,.7); }
+.btn--go {
+  background: linear-gradient(180deg, #6ff06a, var(--green));
+  border-color: rgba(140, 255, 150, .5);
+  color: #04210b;
+  box-shadow:
+    0 1px 0 rgba(230, 255, 235, .5) inset,
+    0 -2px 0 rgba(10, 80, 25, .5) inset,
+    0 2px 0 rgba(0, 0, 0, .7),
+    0 0 22px -6px rgba(57, 227, 68, .8);
+  text-shadow: none;
+}
+.btn--go:active { box-shadow: 0 1px 0 rgba(230,255,235,.4) inset, 0 -1px 0 rgba(10,80,25,.5) inset, 0 0 0 rgba(0,0,0,.7), 0 0 16px -4px rgba(57,227,68,.7); }
+.btn__ico { font-size: 13px; line-height: 1; }
+.btn__ico--pause { width: 9px; height: 11px; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
+.btn__ico--play  { width: 0; height: 0; border-left: 9px solid currentColor; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 2px; }
+
+.actions { flex: none; display: flex; gap: 8px; }
+
+/* ---------- 十字按键 ---------- */
+
+.pad {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  max-width: 208px;
+  margin: 0 auto;
+}
+.pad__btn {
+  appearance: none;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #16301d, #0b1a10);
+  box-shadow:
+    0 1px 0 rgba(57, 227, 68, .14) inset,
+    0 -2px 0 rgba(0, 0, 0, .55) inset,
+    0 2px 0 rgba(0, 0, 0, .7);
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: transform 70ms var(--ease-out), box-shadow 70ms, background 110ms, color 110ms;
+}
+.pad__btn:active {
+  transform: translateY(2px);
+  color: #04210b;
+  background: linear-gradient(180deg, #6ff06a, var(--green));
+  border-color: rgba(140, 255, 150, .55);
+  box-shadow:
+    0 1px 0 rgba(230, 255, 235, .45) inset,
+    0 -1px 0 rgba(10, 80, 25, .5) inset,
+    0 0 0 rgba(0, 0, 0, .7),
+    0 0 18px -4px rgba(57, 227, 68, .75);
+}
+.pad__btn[data-dir="up"]    { grid-area: 1 / 2; }
+.pad__btn[data-dir="left"]  { grid-area: 2 / 1; }
+.pad__btn[data-dir="down"]  { grid-area: 2 / 2; }
+.pad__btn[data-dir="right"] { grid-area: 2 / 3; }
+
+.tip {
+  flex: none;
+  margin: 0;
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: .02em;
+  color: var(--fg-faint);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tip kbd {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  padding: 1px 4px;
+  margin: 0 1px;
+  border-radius: 2px;
+  background: rgba(57, 227, 68, .09);
+  border: 1px solid var(--line-faint);
+  color: var(--fg-dim);
+}
+
+/* ---------- 矮屏兜底 ---------- */
+
+@media (max-height: 600px) {
+  .machine { padding: 7px 10px 8px; }
+  .title { font-size: 20px; }
+  .nixie { height: 20px; }
+  .pad__btn { height: 34px; }
+  .btn { padding: 9px 10px; font-size: 12.5px; }
+  .tip { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt::after, .lamp, .ghost--on .ghost__face, .burst--on .burst__ring, .food--in { animation: none !important; }
+  .seg--head .seg__face, .food__face { animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="crt" aria-hidden="true"></div>
+
+<main class="shell">
+
+  <header class="machine" id="machine" data-state="ready">
+    <div class="machine__row">
+      <div style="display:flex;align-items:flex-start;gap:9px;min-width:0;">
+        <span class="lamp" aria-hidden="true"></span>
+        <div style="min-width:0;">
+          <h1 class="title">SNAKE</h1>
+          <p class="subtitle">blockade · 1976</p>
+        </div>
+      </div>
+      <div class="gauges">
+        <div class="gauge" id="gaugeLen">
+          <span class="gauge__k">长度</span>
+          <span class="nixie nixie--hot" id="lenNixie"></span>
+        </div>
+        <div class="gauge">
+          <span class="gauge__k">最高</span>
+          <span class="nixie" id="bestNixie"></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="stage">
+    <div class="board" id="board">
+      <div class="grid" aria-hidden="true"></div>
+      <div class="items" id="items"></div>
+
+      <div class="veil veil--hint veil--on" id="veilHint">
+        <div class="veil__card">
+          <div class="swipe-glyph" aria-hidden="true"><i>↑</i><i>←</i><i>↓</i><i>→</i></div>
+          <h2 class="veil__title">滑动开始</h2>
+          <p class="veil__text">上下左右转向，吃掉红块，<br>别撞墙也别咬到自己。</p>
+        </div>
+      </div>
+
+      <div class="veil" id="veilPause">
+        <div class="veil__card">
+          <p class="veil__kicker">&gt; halted</p>
+          <h2 class="veil__title">已暂停</h2>
+          <p class="veil__text">当前长度 <b id="pauseLen">0</b></p>
+          <div class="veil__actions">
+            <button class="btn btn--go" data-act="resume">继续</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="veil" id="veilOver">
+        <div class="veil__card">
+          <p class="veil__kicker" id="overKicker">&gt; collision</p>
+          <h2 class="veil__title" id="overTitle">撞上了</h2>
+          <p class="veil__text">本局 <b id="overLen">0</b> · 最高 <b id="overBest">0</b></p>
+          <div class="veil__actions">
+            <button class="btn btn--go" data-act="over-new">重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="pad" id="pad">
+    <button class="pad__btn" type="button" data-dir="up"    aria-label="向上">↑</button>
+    <button class="pad__btn" type="button" data-dir="left"  aria-label="向左">←</button>
+    <button class="pad__btn" type="button" data-dir="down"  aria-label="向下">↓</button>
+    <button class="pad__btn" type="button" data-dir="right" aria-label="向右">→</button>
+  </div>
+
+  <div class="actions">
+    <button class="btn" id="btnPause" data-act="pause">
+      <span class="btn__ico btn__ico--pause" id="pauseIco" aria-hidden="true"></span><span id="pauseTxt">暂停</span>
+    </button>
+    <button class="btn" data-act="new">
+      <span class="btn__ico">⟳</span>重新开始
+    </button>
+  </div>
+
+  <p class="tip">滑动 / 十字键转向 · 键盘 <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 或 <kbd>WASD</kbd></p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 常量 ---------- */
+  var N = 14;                    // 棋盘边长（长 × 宽 = 196 格）
+  var KEY_BEST = 'h5-snake-best';
+  var KEY_TUTOR = 'h5-snake-played';
+  var THRESHOLD = 22;            // 触屏滑动判定阈值(px)
+  var QUEUE_MAX = 2;             // 输入队列：一格内允许连打两次转向（如上→右）
+  var BASE_MS = 180;             // 起始步进：开局 5.6 格/秒，给玩家看清棋盘的时间
+  var MIN_MS = 82;               // 最快步进（长蛇时约 12 格/秒）
+  var RAMP = 2.9;                // 每长一节提速多少 ms；L3→L37 之间平滑收敛到 MIN
+  var INK = [3, 8, 5];           // 尾色混向的屏幕黑（绿屏的环境偏绿）
+
+  /* 色阶：刻度是「长度」，不是 2 的幂 —— 蛇长是 3、4、5…40+，没有幂次结构。
+     绿屏是单色的，于是这条刻度天然就是一根亮度轴：
+     越吃越长 = 磷光越亮，直到 L40 烧成过曝白。
+     暗端不能压太低：屏幕底色接近纯黑，起步档再暗就看不见蛇了。
+     六个锚点连续插值，其余取中间值。 */
+  var STOPS = [
+    { L: 5,  c: [0x23, 0x8d, 0x2b] },   // 暗绿：开局那 3 节就是这档，压太暗玩家第一眼看不清
+    { L: 10, c: [0x2b, 0xab, 0x34] },
+    { L: 18, c: [0x31, 0xc5, 0x3b] },
+    { L: 24, c: [0x39, 0xe3, 0x44] },   // 标准 P1 街机绿
+    { L: 32, c: [0x65, 0xff, 0x65] },   // 亮绿
+    { L: 40, c: [0xd5, 0xff, 0xd5] }    // 过曝
+  ];
+
+  var DIRS = {
+    up:    { r: -1, c: 0 },
+    down:  { r: 1,  c: 0 },
+    left:  { r: 0,  c: -1 },
+    right: { r: 0,  c: 1 }
+  };
+  var OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
+
+  /* ---------- DOM ---------- */
+  var machineEl = document.getElementById('machine');
+  var boardEl = document.getElementById('board');
+  var itemsEl = document.getElementById('items');
+  var gaugeLen = document.getElementById('gaugeLen');
+  var lenNixie = document.getElementById('lenNixie');
+  var bestNixie = document.getElementById('bestNixie');
+  var pauseBtn = document.getElementById('btnPause');
+  var pauseIco = document.getElementById('pauseIco');
+  var pauseTxt = document.getElementById('pauseTxt');
+  var veilHint = document.getElementById('veilHint');
+  var veilPause = document.getElementById('veilPause');
+  var veilOver = document.getElementById('veilOver');
+  var pauseLenEl = document.getElementById('pauseLen');
+  var overKicker = document.getElementById('overKicker');
+  var overTitle = document.getElementById('overTitle');
+  var overLenEl = document.getElementById('overLen');
+  var overBestEl = document.getElementById('overBest');
+
+  /* ---------- 状态 ---------- */
+  var body = [];            // [{r,c}]，body[0] 是蛇头
+  var dir = 'right';        // 当前生效方向
+  var inputDir = 'right';   // 最近一次被接受的输入（用于「按下瞬间」挡 180° 掉头）
+  var queue = [];           // 待生效的转向
+  var food = null;          // {r,c}
+  var over = false, paused = false, hinted = false, started = false, overBy = '';
+  var best = 0;
+  var manual = false;       // 测试钩子：手动步进时关掉 rAF 自走
+
+  var segEls = [];          // 按体序复用的元素，永不销毁重建
+  var raf = 0, acc = 0, lastTs = 0, ghostT = 0;
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+  /* ---------- 色阶 ---------- */
+  function baseAt(L) {
+    if (L <= STOPS[0].L) return STOPS[0].c.slice();
+    for (var i = 0; i < STOPS.length - 1; i++) {
+      var a = STOPS[i], b = STOPS[i + 1];
+      if (L <= b.L) {
+        var t = (L - a.L) / (b.L - a.L);
+        return [0, 1, 2].map(function (k) { return a.c[k] + (b.c[k] - a.c[k]) * t; });
+      }
+    }
+    return STOPS[STOPS.length - 1].c.slice();
+  }
+  function mix(a, b, t) {
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    return [0, 1, 2].map(function (k) { return a[k] + (b[k] - a[k]) * t; });
+  }
+  function css(c) { return 'rgb(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ')'; }
+  function rgba(c, a) { return 'rgba(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ',' + a + ')'; }
+  function lum(c) { return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255; }
+
+  /* 蛇身沿体长递减亮度：头取色阶当前档（最亮），尾向屏幕黑收敛（最暗）。
+     收敛强度要跟着色阶进度走：暗档本来就没多少亮度余量，再按固定系数收，
+     尾节会掉到 2:1 以下直接看不见；亮档有余量，才收得起「头热尾冷」的落差。 */
+  var HOT = [0xd5, 0xff, 0xd5];
+  function rampProgress(len) {
+    return Math.max(0, Math.min(1, (len - STOPS[0].L) / (STOPS[STOPS.length - 1].L - STOPS[0].L)));
+  }
+  function segStyle(i, len) {
+    var base = baseAt(len);
+    var prog = rampProgress(len);
+    var t = len > 1 ? i / (len - 1) : 0;
+    var k = 0.42 * (0.45 + 0.55 * prog);
+    var front = mix(INK, base, 1 - k * t);
+    var core = mix(front, HOT, 0.40 * (1 - 0.5 * t));
+    var glowA = 0.40 + 0.45 * prog;
+    return {
+      front: front,
+      bg: css(front),
+      hi: css(core),
+      fg: lum(core) > 0.62 ? '#04210b' : '#0d1a10',
+      glow: rgba(base, glowA.toFixed(3))
+    };
+  }
+
+  /* ---------- 7 段数码管 ---------- */
+  var SEG_MAP = {
+    '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc',
+    '5': 'afgcd', '6': 'afgecd', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg'
+  };
+  var SEG_NAMES = 'abcdefg';
+
+  function makeDigit() {
+    var d = document.createElement('span');
+    d.className = 'n7';
+    for (var i = 0; i < 7; i++) {
+      var s = document.createElement('i');
+      s.className = 'n7__s n7__s--' + SEG_NAMES[i];
+      d.appendChild(s);
+    }
+    return d;
+  }
+  function setNixie(el, str) {
+    str = String(str);
+    while (el.children.length < str.length) el.insertBefore(makeDigit(), el.firstChild);
+    while (el.children.length > str.length) el.removeChild(el.lastChild);
+    for (var i = 0; i < str.length; i++) {
+      var on = SEG_MAP[str[i]] || '';
+      var segs = el.children[i].children;
+      for (var j = 0; j < 7; j++) segs[j].classList.toggle('on', on.indexOf(SEG_NAMES[j]) >= 0);
+    }
+  }
+
+  /* ---------- 节点 ---------- */
+  function makeSeg() {
+    var el = document.createElement('div');
+    el.className = 'seg';
+    var face = document.createElement('div');
+    face.className = 'seg__face';
+    var tag = document.createElement('span');
+    tag.className = 'seg__tag';
+    var eyes = document.createElement('span');
+    eyes.className = 'seg__eyes';
+    eyes.appendChild(document.createElement('i'));
+    eyes.appendChild(document.createElement('i'));
+    face.appendChild(eyes);
+    face.appendChild(tag);
+    el.appendChild(face);
+    return el;
+  }
+
+  var ghostEl = (function () {
+    var el = document.createElement('div');
+    el.className = 'ghost';
+    el.appendChild(document.createElement('div')).className = 'ghost__face';
+    itemsEl.appendChild(el);
+    return el;
+  })();
+
+  var foodEl = (function () {
+    var el = document.createElement('div');
+    el.className = 'food';
+    el.appendChild(document.createElement('div')).className = 'food__face';
+    itemsEl.appendChild(el);
+    return el;
+  })();
+
+  var burstEl = (function () {
+    var el = document.createElement('div');
+    el.className = 'burst';
+    el.appendChild(document.createElement('div')).className = 'burst__ring';
+    itemsEl.appendChild(el);
+    return el;
+  })();
+
+  /* ---------- 开局 ---------- */
+  function reset() {
+    stop();
+    body = [{ r: (N / 2) | 0, c: ((N / 2) | 0) - 1 },
+            { r: (N / 2) | 0, c: ((N / 2) | 0) - 2 },
+            { r: (N / 2) | 0, c: ((N / 2) | 0) - 3 }];
+    dir = 'right';
+    inputDir = 'right';
+    queue = [];
+    over = false;
+    overBy = '';
+    paused = false;
+    started = false;
+    acc = 0;
+
+    segEls.forEach(function (el) { el.remove(); });
+    segEls = [];
+    ghostEl.classList.remove('ghost--on');
+    burstEl.classList.remove('burst--on');
+
+    veilPause.classList.remove('veil--on');
+    veilOver.classList.remove('veil--on');
+    machineEl.setAttribute('data-state', 'ready');
+    hinted = load(KEY_TUTOR) === '1';
+    if (hinted) veilHint.classList.remove('veil--on');
+
+    spawnFood();
+    render();
+    paint();
+  }
+
+  function spawnFood() {
+    var free = [];
+    for (var r = 0; r < N; r++)
+      for (var c = 0; c < N; c++) {
+        var hit = false;
+        for (var i = 0; i < body.length; i++)
+          if (body[i].r === r && body[i].c === c) { hit = true; break; }
+        if (!hit) free.push({ r: r, c: c });
+      }
+    if (!free.length) { food = null; return false; }
+    food = free[(Math.random() * free.length) | 0];
+    // 「出现」动画只在这里播一次。
+    // 放进 render() 的话，蛇每走一步都会重播一遍，食物就一直在闪。
+    foodEl.classList.remove('food--in');
+    void foodEl.offsetWidth;
+    foodEl.classList.add('food--in');
+    return true;
+  }
+
+  /* ---------- 输入 ----------
+     贪吃蛇是实时的，所以这里没有 2048 那套 128ms busy 锁。
+     掉头在「按下的瞬间」就挡掉（对 inputDir 判定），不给玩家按下去才发现不生效。 */
+  function dismissHint() {
+    if (hinted) return;
+    hinted = true;
+    store(KEY_TUTOR, '1');
+    veilHint.classList.remove('veil--on');
+  }
+
+  function press(d) {
+    if (over || !DIRS[d]) return false;
+    // 下面这两行必须都在方向合法性检查「之前」：
+    // 开局朝右时按 → 会被判为重复方向而 return。若把启动和关教学层留在检查之后，
+    // 玩家按了键却看不到蛇动、教学层也像没反应 —— 同一个根因，两个症状。
+    dismissHint();
+    if (!started) { started = true; machineEl.setAttribute('data-state', 'run'); play(); }
+    if (d === OPP[inputDir] || d === inputDir) return false;   // 180° 掉头 / 重复
+    if (queue.length >= QUEUE_MAX) return false;
+    queue.push(d);
+    inputDir = d;
+    return true;
+  }
+
+  function interval(len) {
+    if (len === undefined) len = body.length;
+    return Math.max(MIN_MS, BASE_MS - (len - 3) * RAMP);
+  }
+
+  function advance() {
+    if (over || paused) return false;
+    if (queue.length) dir = queue.shift();
+
+    var head = body[0];
+    var d = DIRS[dir];
+    var nr = head.r + d.r, nc = head.c + d.c;
+
+    if (nr < 0 || nc < 0 || nr >= N || nc >= N) return die('wall');
+
+    var grow = food && nr === food.r && nc === food.c;
+    // 不吃食物时尾巴这一步就会腾空，所以尾格不算撞 —— 少一格就判死是错的
+    var limit = grow ? body.length : body.length - 1;
+    for (var i = 0; i < limit; i++)
+      if (body[i].r === nr && body[i].c === nc) return die('self');
+
+    var vacated = null;
+    if (!grow) vacated = body[body.length - 1];
+    body.unshift({ r: nr, c: nc });
+
+    if (grow) {
+      showBurst(food.r, food.c);
+      food = null;
+      bumpScore();
+    } else {
+      body.pop();
+      showGhost(vacated, segStyle(body.length, body.length).front);
+    }
+
+    if (!food && !spawnFood()) { render(); return die('full'); }
+
+    render();
+    paint();
+    return true;
+  }
+
+  function die(by) {
+    over = true;
+    overBy = by;
+    stop();
+    if (body.length > best) { best = body.length; store(KEY_BEST, String(best)); }
+    machineEl.setAttribute('data-state', 'over');
+    render();
+    paint();
+    overLenEl.textContent = body.length;
+    overBestEl.textContent = best;
+    if (by === 'self') { overKicker.textContent = '> recursion'; overTitle.textContent = '咬到自己'; }
+    else if (by === 'full') { overKicker.textContent = '> buffer full'; overTitle.textContent = '无处可走'; }
+    else { overKicker.textContent = '> out of bounds'; overTitle.textContent = '撞墙了'; }
+    veilOver.classList.add('veil--on');
+    return false;
+  }
+
+  /* ---------- 主循环 ---------- */
+  function play() {
+    if (raf) return;
+    lastTs = 0;
+    acc = 0;
+    raf = requestAnimationFrame(frame);
+  }
+  function stop() {
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  }
+  function frame(ts) {
+    raf = requestAnimationFrame(frame);
+    if (!lastTs) { lastTs = ts; return; }
+    var dt = ts - lastTs;
+    lastTs = ts;
+    if (dt > 250) dt = 250;      // 后台切回来别一次补上几十步
+    if (over || paused || manual) return;
+    acc += dt;
+    var iv = interval();
+    while (acc >= iv) {
+      acc -= iv;
+      if (!advance()) return;
+      iv = interval();
+    }
+  }
+
+  function setPaused(v) {
+    if (over || v === paused) return;
+    paused = v;
+    pauseLenEl.textContent = body.length;
+    veilPause.classList.toggle('veil--on', paused);
+    pauseTxt.textContent = paused ? '继续' : '暂停';
+    pauseIco.className = 'btn__ico ' + (paused ? 'btn__ico--play' : 'btn__ico--pause');
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render() {
+    var len = body.length;
+
+    for (var i = 0; i < len; i++) {
+      var el = segEls[i];
+      if (!el) { el = makeSeg(); segEls[i] = el; itemsEl.appendChild(el); }
+      var p = body[i];
+      el.style.setProperty('--x', p.c);
+      el.style.setProperty('--y', p.r);
+      var st = segStyle(i, len);
+      el.style.setProperty('--seg-bg', st.bg);
+      el.style.setProperty('--seg-hi', st.hi);
+      el.style.setProperty('--seg-fg', st.fg);
+      el.style.setProperty('--seg-glow', st.glow);
+      if (i === 0) {
+        el.classList.add('seg--head');
+        el.setAttribute('data-dir', dir);      // 眼睛和角标都靠它摆位
+        el.firstChild.firstChild.nextSibling.textContent = 'L' + len;
+      } else {
+        el.classList.remove('seg--head');
+      }
+    }
+    for (var j = len; j < segEls.length; j++) { segEls[j].remove(); segEls[j] = null; }
+
+    if (food) {
+      foodEl.style.setProperty('--x', food.c);
+      foodEl.style.setProperty('--y', food.r);
+    }
+    foodEl.style.display = food ? '' : 'none';
+  }
+
+  function showGhost(p, c) {
+    if (!p) return;
+    ghostEl.style.setProperty('--x', p.c);
+    ghostEl.style.setProperty('--y', p.r);
+    ghostEl.style.setProperty('--ghost-bg', rgba(c, 1));
+    ghostEl.classList.remove('ghost--on');
+    void ghostEl.offsetWidth;
+    ghostEl.classList.add('ghost--on');
+    clearTimeout(ghostT);
+    ghostT = setTimeout(function () { ghostEl.classList.remove('ghost--on'); }, 70);
+  }
+
+  function showBurst(r, c) {
+    burstEl.style.setProperty('--x', c);
+    burstEl.style.setProperty('--y', r);
+    burstEl.classList.remove('burst--on');
+    void burstEl.offsetWidth;
+    burstEl.classList.add('burst--on');
+  }
+
+  function paint() {
+    setNixie(lenNixie, body.length);
+    setNixie(bestNixie, best);
+    pauseBtn.disabled = over;
+  }
+  function bumpScore() {
+    gaugeLen.classList.remove('gauge--bump');
+    void gaugeLen.offsetWidth;
+    gaugeLen.classList.add('gauge--bump');
+  }
+
+  /* ---------- 键盘 ---------- */
+  var KEYMAP = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    w: 'up', s: 'down', a: 'left', d: 'right',
+    W: 'up', S: 'down', A: 'left', D: 'right'
+  };
+  window.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === ' ' || e.key === 'Spacebar') {
+      if (e.target && e.target.closest && e.target.closest('button')) return;  // 让按钮自己处理空格
+      e.preventDefault();
+      setPaused(!paused);
+      return;
+    }
+    var d = KEYMAP[e.key];
+    if (!d) return;
+    e.preventDefault();
+    press(d);
+  });
+
+  /* ---------- 触屏滑动 ---------- */
+  var tracking = false, tx = 0, ty = 0;
+
+  boardEl.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    tracking = true;
+    tx = e.touches[0].clientX;
+    ty = e.touches[0].clientY;
+  }, { passive: true });
+
+  boardEl.addEventListener('touchmove', function (e) {
+    if (tracking) e.preventDefault();
+  }, { passive: false });
+
+  boardEl.addEventListener('touchend', function (e) {
+    if (!tracking) return;
+    tracking = false;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - tx, dy = t.clientY - ty;
+    var adx = Math.abs(dx), ady = Math.abs(dy);
+    if (Math.max(adx, ady) < THRESHOLD) return;
+    press(adx > ady ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+  }, { passive: true });
+
+  boardEl.addEventListener('touchcancel', function () { tracking = false; }, { passive: true });
+
+  /* ---------- 桌面拖拽 ---------- */
+  var dragging = false, mx = 0, my = 0;
+  boardEl.addEventListener('mousedown', function (e) {
+    dragging = true; mx = e.clientX; my = e.clientY;
+  });
+  window.addEventListener('mouseup', function (e) {
+    if (!dragging) return;
+    dragging = false;
+    var dx = e.clientX - mx, dy = e.clientY - my;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < THRESHOLD) return;
+    press(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+  });
+  boardEl.addEventListener('dragstart', function (e) { e.preventDefault(); });
+  boardEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  /* ---------- 十字键 ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll('.pad__btn'), function (b) {
+    var d = b.getAttribute('data-dir');
+    // pointerdown 比 click 少一帧延迟；preventDefault 同时挡掉随后的 click，避免双触发
+    b.addEventListener('pointerdown', function (e) { e.preventDefault(); press(d); });
+    b.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); press(d); }
+    });
+  });
+
+  /* ---------- 按钮 ---------- */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'pause') setPaused(!paused);
+    else if (act === 'resume') setPaused(false);
+    else if (act === 'new' || act === 'over-new') reset();
+  });
+
+  // 实时游戏：切到后台自动暂停，别让玩家回来发现已经撞墙
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && started && !over) setPaused(true);
+  });
+
+  /* ---------- 测试钩子（不影响玩法） ---------- */
+  window.__snake = {
+    N: N,
+    get state() {
+      return {
+        body: body.map(function (p) { return [p.r, p.c]; }),
+        food: food ? [food.r, food.c] : null,
+        len: body.length,
+        dir: dir,
+        inputDir: inputDir,
+        queue: queue.slice(),
+        over: over,
+        paused: paused,
+        overBy: overBy
+      };
+    },
+    setManual: function (v) { manual = !!v; if (manual) stop(); },
+    // 步进表：len 省略时取当前长度
+    intervalMs: function (len) { return interval(len); },
+    get started() { return started; },
+    // 走一次「按下方向 + 推进一格」，走的是玩家真实输入通道
+    step: function (d) { var ok = press(d); advance(); return ok; },
+    reset: reset,
+    placeFood: function (r, c) {
+      if (r < 0 || c < 0 || r >= N || c >= N) return false;
+      for (var i = 0; i < body.length; i++) if (body[i].r === r && body[i].c === c) return false;
+      food = { r: r, c: c };
+      render();
+      return true;
+    },
+    palette: function (L) { return baseAt(L).map(Math.round); },
+    segColor: function (i) {
+      var el = segEls[i];
+      if (!el) return null;
+      // 蛇身是 radial-gradient(芯 → 底色)，色阶对应的是外圈那个底色停靠点，
+      // 所以取最后一个 rgb()。注意 backgroundImage 里第一个数字是渐变参数，不能按序取。
+      var all = getComputedStyle(el.firstChild).backgroundImage.match(/rgba?\(\s*[\d.]+[\s,]+[\d.]+[\s,]+[\d.]+/g);
+      if (!all || !all.length) return null;
+      var m = all[all.length - 1].match(/[\d.]+/g);
+      return [+m[0], +m[1], +m[2]];
+    },
+    headGlow: function () {
+      var el = segEls[0];
+      return el ? getComputedStyle(el).getPropertyValue('--seg-glow').trim() : null;
+    },
+    // 食物的渲染状态：用来盯「有没有在一直重播出现动画」
+    foodPopAnim: function () { return getComputedStyle(foodEl).animationName; },
+    foodRadius: function () { return getComputedStyle(foodEl.firstChild).borderRadius; },
+    foodBox: function () {
+      var a = foodEl.getBoundingClientRect(), b = foodEl.firstChild.getBoundingClientRect();
+      return { cell: +a.width.toFixed(2), face: +b.width.toFixed(2) };
+    },
+    nixie: function () {
+      return {
+        len: [...lenNixie.children].map(d => [...d.children].filter(s => s.classList.contains('on')).map(s => s.className.match(/n7__s--(\w)/)[1]).join('')),
+        best: [...bestNixie.children].map(d => [...d.children].filter(s => s.classList.contains('on')).map(s => s.className.match(/n7__s--(\w)/)[1]).join('')),
+      };
+    }
+  };
+
+  /* ---------- 启动 ---------- */
+  best = parseInt(load(KEY_BEST) || '0', 10) || 0;
+  reset();
+})();
+</script>
+</body>
+</html>

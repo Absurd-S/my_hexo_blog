@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1017">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="2048 · 滑动合并数字方块，单文件 H5">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230e1219'/><rect x='8' y='8' width='22' height='22' rx='6' fill='%232b3f63'/><rect x='34' y='8' width='22' height='22' rx='6' fill='%2315746a'/><rect x='8' y='34' width='22' height='22' rx='6' fill='%23b78c1d'/><rect x='34' y='34' width='22' height='22' rx='6' fill='%23e02c56'/></svg>">
+<title>2048</title>
+<style>
+/* ============================================================
+   2048 — 单文件 H5
+   视觉语言：macOS 玻璃卡片 + 冷暗→炽亮的连续色阶，高值自带微光
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --ink-900: #0b0e14;
+
+  --card-line: rgba(255, 255, 255, .10);
+  --card-line-strong: rgba(255, 255, 255, .18);
+
+  --fg: #e9edf6;
+  --fg-dim: rgba(233, 237, 246, .56);
+  --fg-faint: rgba(233, 237, 246, .32);
+
+  --gap: clamp(7px, 2.2vmin, 11px);
+  --radius-card: 20px;
+  --radius-btn: 14px;
+
+  --ease-out: cubic-bezier(.22, .68, .32, 1);
+  --ease-snap: cubic-bezier(.34, 1.32, .48, 1);
+
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+               "Helvetica Neue", "Microsoft YaHei", system-ui, sans-serif;
+  color: var(--fg);
+  background-color: var(--ink-900);
+  background-image:
+    radial-gradient(120% 78% at 50% -18%, #1e2740 0%, rgba(30, 39, 64, 0) 62%),
+    radial-gradient(90% 60% at 12% 108%, #16202e 0%, rgba(22, 32, 46, 0) 70%),
+    linear-gradient(178deg, #10141d 0%, #0b0e14 100%);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* ---------- 整屏布局：棋盘自适应，底部留安全区 ---------- */
+
+.shell {
+  height: 100vh;
+  height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(var(--safe-t) + 12px) 16px calc(var(--safe-b) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---------- macOS 窗口式标题卡 ---------- */
+
+.window {
+  flex: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.035));
+  border: 1px solid var(--card-line);
+  border-radius: var(--radius-card);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.14) inset,
+    0 -1px 0 rgba(0,0,0,.20) inset,
+    0 18px 40px -24px rgba(0,0,0,.9);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  padding: 12px 14px 13px;
+  display: grid;
+  gap: 10px;
+}
+
+.lights { display: flex; gap: 7px; }
+.lights i {
+  width: 11px; height: 11px; border-radius: 50%;
+  display: block;
+  box-shadow: inset 0 0 0 .5px rgba(0,0,0,.22);
+}
+.lights i:nth-child(1) { background: #ff5f57; }
+.lights i:nth-child(2) { background: #febc2e; }
+.lights i:nth-child(3) { background: #28c840; }
+
+.head-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+
+.title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(92deg, #f4f7ff 20%, #9fc4ff 60%, #ffd79a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.subtitle {
+  margin: 5px 0 0;
+  font-size: clamp(8px, 2.4vw, 10px);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.scores { display: flex; gap: 7px; flex: none; }
+
+.score {
+  min-width: 74px;
+  padding: 6px 11px 7px;
+  text-align: center;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--card-line);
+  border-radius: 11px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.09);
+}
+.score span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  font-weight: 700;
+}
+.score b {
+  display: block;
+  margin-top: 2px;
+  font-size: 19px;
+  line-height: 1.15;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.score--live b { color: #ffe2ae; }
+
+@keyframes tick { 0% { transform: scale(1); } 40% { transform: scale(1.13); } 100% { transform: scale(1); } }
+.score--bump b { animation: tick 260ms var(--ease-snap); }
+
+/* ---------- 棋盘 ---------- */
+
+.stage { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; }
+
+.board {
+  --pad: var(--gap);
+  --board-size: 320px;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: calc(var(--radius-card) + 2px);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.022));
+  border: 1px solid var(--card-line);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.10) inset,
+    0 26px 60px -30px rgba(0,0,0,.95);
+  touch-action: none;
+  overflow: hidden;
+  transition: box-shadow 480ms var(--ease-out);
+}
+@supports (width: 1cqh) {
+  .stage { container-type: size; }
+  .board { width: min(100cqw, 100cqh); }
+}
+
+.slots, .tiles { position: absolute; inset: 0; }
+
+.slot, .tile {
+  position: absolute;
+  top: 0; left: 0;
+  width: calc((100% - var(--pad) * 5) / 4);
+  height: calc((100% - var(--pad) * 5) / 4);
+  border-radius: calc(var(--gap) + 3px);
+  /* 落点 = 外边距 + (格宽 + 外边距) × 序号 */
+  transform: translate(calc(var(--pad) + var(--x) * (100% + var(--pad))),
+                       calc(var(--pad) + var(--y) * (100% + var(--pad))));
+}
+
+.slot {
+  background: rgba(255,255,255,.05);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.045), inset 0 -1px 0 rgba(0,0,0,.18);
+}
+/* 底板十字刻度：一点点工程制图的秩序感 */
+.slot::before, .slot::after { content: ""; position: absolute; background: rgba(255,255,255,.09); }
+.slot::before { left: 50%; top: 50%; width: 6px; height: 1px; transform: translate(-50%, -50%); }
+.slot::after  { left: 50%; top: 50%; width: 1px; height: 6px; transform: translate(-50%, -50%); }
+
+.tile {
+  will-change: transform;
+  transition: transform 128ms var(--ease-out);
+}
+.tile--sinking { opacity: 0; transition: opacity 80ms linear; }
+
+.tile__face {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  display: grid;
+  place-items: center;
+  background: var(--tile-bg);
+  color: var(--tile-fg);
+  box-shadow: var(--tile-shadow);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.035em;
+  font-size: calc(var(--board-size) * var(--tile-fs));
+  line-height: 1;
+  overflow: hidden;
+}
+/* 斜向柔光：让方块有材质而不是纯色块 */
+.tile__face::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(152deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.06) 34%, rgba(255,255,255,0) 58%);
+  mix-blend-mode: overlay;
+}
+
+/* 2 的幂次角标 —— 像工程图右上角的技术标注 */
+.tile__exp {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  font-size: calc(var(--board-size) * .026);
+  font-weight: 700;
+  color: currentColor;
+  opacity: .42;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile--hot .tile__face { animation: breathe 3.4s ease-in-out infinite; }
+@keyframes breathe {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.10); }
+}
+
+@keyframes spawn { from { transform: scale(.28); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.tile--new .tile__face { animation: spawn 170ms var(--ease-snap) both; }
+
+@keyframes merge { 0% { transform: scale(1); } 46% { transform: scale(1.17); } 100% { transform: scale(1); } }
+.tile--merge .tile__face { animation: merge 200ms var(--ease-snap) both; }
+
+/* 达成 2048：整板泛金 + 一道扫光 */
+@keyframes sweep { from { transform: translateX(-140%) skewX(-18deg); } to { transform: translateX(340%) skewX(-18deg); } }
+.board--win::after {
+  content: "";
+  position: absolute;
+  top: -20%; bottom: -20%; left: 0;
+  width: 26%;
+  background: linear-gradient(90deg, rgba(255,221,150,0), rgba(255,238,196,.36), rgba(255,221,150,0));
+  animation: sweep 900ms var(--ease-out) 2;
+  pointer-events: none;
+}
+.board--won {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.18) inset,
+    0 0 0 1px rgba(255, 205, 120, .38),
+    0 0 48px -8px rgba(255, 186, 92, .40),
+    0 26px 60px -30px rgba(0,0,0,.95);
+}
+
+/* ---------- 覆盖层 ---------- */
+
+.veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(9, 12, 18, .70);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 220ms var(--ease-out), visibility 220ms;
+  z-index: 4;
+}
+.veil--on { opacity: 1; visibility: visible; }
+
+.veil__card {
+  width: 100%;
+  max-width: 300px;
+  padding: 20px 18px 16px;
+  text-align: center;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(38,46,64,.96), rgba(23,28,40,.97));
+  border: 1px solid var(--card-line-strong);
+  box-shadow: 0 1px 0 rgba(255,255,255,.16) inset, 0 30px 60px -20px rgba(0,0,0,.9);
+  transform: translateY(12px) scale(.97);
+  transition: transform 260ms var(--ease-snap);
+}
+.veil--on .veil__card { transform: none; }
+
+.veil__kicker {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  font-weight: 700;
+}
+.veil__title { margin: 7px 0 6px; font-size: 25px; font-weight: 800; letter-spacing: -.01em; }
+.veil__text { margin: 0 0 15px; font-size: 13px; line-height: 1.62; color: var(--fg-dim); }
+.veil__text b { color: #ffdc9e; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.veil--hint .veil__card { background: none; border: none; box-shadow: none; max-width: 262px; }
+.veil--hint .veil__title { font-size: 19px; }
+.swipe-glyph { display: flex; justify-content: center; gap: 5px; margin-bottom: 12px; }
+.swipe-glyph i {
+  width: 26px; height: 26px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.05);
+  display: grid; place-items: center;
+  font-style: normal; font-size: 11px; color: var(--fg-dim);
+}
+.swipe-glyph i.on { border-color: rgba(255,214,140,.5); color: #ffd68c; animation: nudge 1.5s var(--ease-out) infinite; }
+@keyframes nudge { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+.veil__actions { display: flex; gap: 8px; }
+
+/* ---------- 按钮 ---------- */
+
+.btn {
+  flex: 1;
+  appearance: none;
+  border: 1px solid var(--card-line);
+  border-radius: var(--radius-btn);
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.045));
+  box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 4px 10px -6px rgba(0,0,0,.7);
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  padding: 12px 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 90ms var(--ease-out), background 160ms, opacity 160ms;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.btn:active { transform: scale(.972); }
+.btn:disabled { opacity: .34; cursor: default; }
+.btn:disabled:active { transform: none; }
+.btn--ghost { background: rgba(255,255,255,.03); }
+.btn--primary {
+  background: linear-gradient(180deg, #ffd489, #f0a94a);
+  border-color: rgba(255, 224, 160, .55);
+  color: #35210a;
+  box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 8px 18px -10px rgba(240, 169, 74, .9);
+}
+.btn__ico { font-size: 14px; line-height: 1; }
+
+.actions { flex: none; display: flex; gap: 9px; }
+
+.tip {
+  flex: none;
+  margin: 0;
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: .03em;
+  color: var(--fg-faint);
+  line-height: 1.5;
+}
+.tip kbd {
+  font: inherit;
+  font-size: 9.5px;
+  padding: 1px 5px;
+  margin: 0 1px;
+  border-radius: 5px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid var(--card-line);
+  color: var(--fg-dim);
+}
+
+/* ---------- 数值色阶：冷暗 → 炽亮 ---------- */
+
+.t2  { --tile-bg: linear-gradient(158deg, #27324b, #1b2334); --tile-fg: #c6d4ef; }
+.t4  { --tile-bg: linear-gradient(158deg, #2b3f63, #1f2d48); --tile-fg: #bcd2f4; }
+.t8  { --tile-bg: linear-gradient(158deg, #1c5f7b, #12404f); --tile-fg: #a3ebf8; }
+.t16 { --tile-bg: linear-gradient(158deg, #15746a, #0d544c); --tile-fg: #9bf2de; }
+.t32 { --tile-bg: linear-gradient(158deg, #2c8149, #1c5b2f); --tile-fg: #b9f5a3; }
+.t64 { --tile-bg: linear-gradient(158deg, #6f7f1b, #4f5b0d); --tile-fg: #ecf7a4; }
+.t128 {
+  --tile-bg: linear-gradient(158deg, #b78c1d, #916a11); --tile-fg: #fff3c2;
+  --tile-shadow: 0 1px 0 rgba(255,255,255,.42) inset, 0 -2px 0 rgba(0,0,0,.18) inset, 0 0 20px -6px rgba(233,176,58,.55), 0 6px 14px -8px rgba(0,0,0,.7);
+}
+.t256 {
+  --tile-bg: linear-gradient(158deg, #d99a1c, #b0760f); --tile-fg: #3a2404;
+  --tile-shadow: 0 1px 0 rgba(255,255,255,.48) inset, 0 -2px 0 rgba(0,0,0,.16) inset, 0 0 24px -6px rgba(233,160,40,.62), 0 6px 14px -8px rgba(0,0,0,.7);
+}
+.t512 {
+  --tile-bg: linear-gradient(158deg, #e97c17, #c0570c); --tile-fg: #3d1c02;
+  --tile-shadow: 0 1px 0 rgba(255,255,255,.50) inset, 0 -2px 0 rgba(0,0,0,.16) inset, 0 0 26px -5px rgba(240,120,30,.70), 0 6px 14px -8px rgba(0,0,0,.7);
+}
+.t1024 {
+  --tile-bg: linear-gradient(158deg, #e8481f, #bd2d0d); --tile-fg: #ffeae0;
+  --tile-shadow: 0 1px 0 rgba(255,255,255,.45) inset, 0 -2px 0 rgba(0,0,0,.18) inset, 0 0 30px -5px rgba(240,80,45,.70), 0 6px 16px -8px rgba(0,0,0,.75);
+}
+.t2048 {
+  --tile-bg: linear-gradient(158deg, #e02c56, #b2133c); --tile-fg: #ffe6ec;
+  --tile-shadow: 0 1px 0 rgba(255,255,255,.50) inset, 0 -2px 0 rgba(0,0,0,.18) inset, 0 0 34px -4px rgba(238,60,100,.78), 0 6px 16px -8px rgba(0,0,0,.75);
+}
+.t4096 {
+  --tile-bg: linear-gradient(158deg, #a933cc, #7f16a2); --tile-fg: #f7e8ff;
+  --tile-shadow: 0 1px 0 rgba(255,255,255,.48) inset, 0 -2px 0 rgba(0,0,0,.18) inset, 0 0 34px -4px rgba(190,70,225,.78), 0 6px 16px -8px rgba(0,0,0,.75);
+}
+.t8192 {
+  --tile-bg: linear-gradient(158deg, #5c31dd, #38139f); --tile-fg: #ece6ff;
+  --tile-shadow: 0 1px 0 rgba(255,255,255,.48) inset, 0 -2px 0 rgba(0,0,0,.18) inset, 0 0 38px -4px rgba(120,90,240,.82), 0 6px 16px -8px rgba(0,0,0,.75);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile, .tile--sinking { transition-duration: 1ms; }
+  .tile--hot .tile__face, .swipe-glyph i.on, .board--win::after { animation: none !important; }
+  .tile--new .tile__face, .tile--merge .tile__face { animation-duration: 1ms; }
+}
+</style>
+</head>
+<body>
+
+<main class="shell">
+
+  <header class="window">
+    <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="head-row">
+      <div>
+        <h1 class="title">2048</h1>
+        <p class="subtitle">slide · merge · repeat</p>
+      </div>
+      <div class="scores">
+        <div class="score score--live" id="scoreBox">
+          <span>分数</span><b id="score">0</b>
+        </div>
+        <div class="score">
+          <span>最高</span><b id="best">0</b>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="stage">
+    <div class="board" id="board">
+      <div class="slots" id="slots"></div>
+      <div class="tiles" id="tiles"></div>
+
+      <div class="veil veil--hint veil--on" id="veilHint">
+        <div class="veil__card">
+          <div class="swipe-glyph" aria-hidden="true"><i>↑</i><i>←</i><i>↓</i><i>→</i></div>
+          <h2 class="veil__title">滑动棋盘开始</h2>
+          <p class="veil__text">上下左右滑动，相同数字相撞即合并。<br>目标凑出 <b>2048</b>。</p>
+        </div>
+      </div>
+
+      <div class="veil" id="veilWin">
+        <div class="veil__card">
+          <p class="veil__kicker">reached 2¹¹</p>
+          <h2 class="veil__title">2048 达成</h2>
+          <p class="veil__text">当前 <b id="winScore">0</b> 分。棋盘还空着呢，<br>要不要试试更大的数字？</p>
+          <div class="veil__actions">
+            <button class="btn" data-act="win-close">继续玩</button>
+            <button class="btn btn--primary" data-act="win-new">再来一局</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="veil" id="veilOver">
+        <div class="veil__card">
+          <p class="veil__kicker">no moves left</p>
+          <h2 class="veil__title">走不动了</h2>
+          <p class="veil__text">本局 <b id="overScore">0</b> 分 · 最高 <b id="overBest">0</b></p>
+          <div class="veil__actions">
+            <button class="btn btn--primary" data-act="over-new">重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="btn btn--ghost" id="btnUndo" data-act="undo" disabled>
+      <span class="btn__ico">↶</span>撤销一步
+    </button>
+    <button class="btn" data-act="new">
+      <span class="btn__ico">⟳</span>重新开始
+    </button>
+  </div>
+
+  <p class="tip">触屏滑动 · 键盘 <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 或 <kbd>WASD</kbd></p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var SIZE = 4;
+  var KEY_BEST = 'h5-2048-best';
+  var KEY_TUTOR = 'h5-2048-played';
+  var UNDO_DEPTH = 24;
+  var MOVE_MS = 128;      // 与 CSS .tile transition 时长保持一致
+  var THRESHOLD = 22;     // 触屏滑动判定阈值(px)
+
+  /* ---------- 数值 → 类名 / 字号系数 ---------- */
+  var TILE_CLASS = {
+    2: 't2', 4: 't4', 8: 't8', 16: 't16', 32: 't32', 64: 't64',
+    128: 't128', 256: 't256', 512: 't512', 1024: 't1024',
+    2048: 't2048', 4096: 't4096', 8192: 't8192'
+  };
+  // 按位数定字号，保证 5 位数也不会挤爆格子
+  var FS_BY_DIGITS = [0, .105, .100, .082, .066, .052];
+  var HOT_FROM = 512;
+
+  function expOf(v) { var n = 0; while (v > 1) { v = Math.floor(v / 2); n++; } return n; }
+  function classFor(v) { return TILE_CLASS[v] || 't8192'; }
+  function fsFor(v) { return FS_BY_DIGITS[Math.min(String(v).length, 5)]; }
+  function sup(n) {
+    var map = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+    return String(n).split('').map(function (ch) { return map[ch] || ch; }).join('');
+  }
+
+  /* ---------- DOM ---------- */
+  var boardEl = document.getElementById('board');
+  var slotsEl = document.getElementById('slots');
+  var tilesEl = document.getElementById('tiles');
+  var scoreBox = document.getElementById('scoreBox');
+  var scoreEl = document.getElementById('score');
+  var bestEl = document.getElementById('best');
+  var undoBtn = document.getElementById('btnUndo');
+  var veilHint = document.getElementById('veilHint');
+  var veilWin = document.getElementById('veilWin');
+  var veilOver = document.getElementById('veilOver');
+  var winScoreEl = document.getElementById('winScore');
+  var overScoreEl = document.getElementById('overScore');
+  var overBestEl = document.getElementById('overBest');
+
+  /* ---------- 状态 ---------- */
+  var tileNodes = new Map();
+  var uid = 0;
+  var cells, score, best, history, won, over, busy, hinted, winShown;
+  var step = 0;   // 单调递增的步号：重开局/撤销时作废在途动画的收尾回调
+
+  function store(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
+  function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+
+  /* ---------- 棋盘数据 ---------- */
+  function blank() {
+    var g = [];
+    for (var r = 0; r < SIZE; r++) g.push(new Array(SIZE).fill(null));
+    return g;
+  }
+
+  function spawn(g) {
+    var free = [];
+    for (var r = 0; r < SIZE; r++)
+      for (var c = 0; c < SIZE; c++)
+        if (!g[r][c]) free.push([r, c]);
+    if (!free.length) return null;
+    var p = free[(Math.random() * free.length) | 0];
+    var t = { id: ++uid, r: p[0], c: p[1], v: Math.random() < .9 ? 2 : 4, fresh: true };
+    g[p[0]][p[1]] = t;
+    return t;
+  }
+
+  function snapshot() {
+    return cells.map(function (row) {
+      return row.map(function (t) { return t ? { id: t.id, r: t.r, c: t.c, v: t.v, fresh: false } : null; });
+    });
+  }
+  function restore(snap) {
+    return snap.map(function (row) { return row.map(function (t) { return t ? { id: t.id, r: t.r, c: t.c, v: t.v, fresh: false } : null; }); });
+  }
+  function maxValue() {
+    var m = 0;
+    for (var r = 0; r < SIZE; r++)
+      for (var c = 0; c < SIZE; c++)
+        if (cells[r][c] && cells[r][c].v > m) m = cells[r][c].v;
+    return m;
+  }
+  function isDead() {
+    for (var r = 0; r < SIZE; r++)
+      for (var c = 0; c < SIZE; c++) {
+        if (!cells[r][c]) return false;
+        if (c + 1 < SIZE && cells[r][c + 1] && cells[r][c + 1].v === cells[r][c].v) return false;
+        if (r + 1 < SIZE && cells[r + 1][c] && cells[r + 1][c].v === cells[r][c].v) return false;
+      }
+    return true;
+  }
+
+  function reset() {
+    step++;
+    cells = blank();
+    score = 0;
+    history = [];
+    won = false;
+    winShown = false;
+    over = false;
+    busy = false;
+    uid = 0;
+    hinted = load(KEY_TUTOR) === '1';
+
+    spawn(cells);
+    spawn(cells);
+
+    tileNodes.forEach(function (el) { el.remove(); });
+    tileNodes.clear();
+    boardEl.classList.remove('board--won', 'board--win');
+    hideVeils();
+    if (hinted) hideHint();
+
+    render();
+    paint();
+  }
+
+  /* ---------- 核心移动 ----------
+     rev = true 表示这条线要"从远端往近端读"，这样 out[0] 永远是滑完后落在最前面的那一格。
+     down/right 必须翻，否则合并顺序与落点都会反。 */
+  var DIRS = {
+    up:    { rows: true,  rev: false },
+    down:  { rows: true,  rev: true  },
+    left:  { rows: false, rev: false },
+    right: { rows: false, rev: true  }
+  };
+
+  function move(dir) {
+    if (busy || over) return false;
+    var cfg = DIRS[dir];
+    if (!cfg) return false;
+
+    // 下面的压缩/合并会就地改写 cells，撤销要用的是"动之前"的状态，必须先留档
+    var before = snapshot();
+
+    // 滑动方向上的第 k 格，对应棋盘里的第几行/列
+    function at(k) { return cfg.rev ? SIZE - 1 - k : k; }
+    function get(n, k) { return cfg.rows ? cells[at(k)][n] : cells[n][at(k)]; }
+    function set(n, k, tile) { if (cfg.rows) cells[at(k)][n] = tile; else cells[n][at(k)] = tile; }
+
+    var moved = false, gained = 0;
+    var pairs = [];   // { keep, eaten }
+
+    for (var n = 0; n < SIZE; n++) {
+      var seq = [];
+      for (var i = 0; i < SIZE; i++) seq.push(get(n, i));
+
+      var packed = seq.filter(function (t) { return t !== null; });
+      var out = [];
+
+      for (var k = 0; k < packed.length; k++) {
+        if (k + 1 < packed.length && packed[k].v === packed[k + 1].v) {
+          var keep = packed[k], eaten = packed[k + 1];
+          keep.v *= 2;
+          keep.r = cfg.rows ? at(out.length) : n;
+          keep.c = cfg.rows ? n : at(out.length);
+          out.push(keep);
+          pairs.push({ keep: keep, eaten: eaten });
+          gained += keep.v;
+          k++;
+        } else {
+          var t = packed[k];
+          t.r = cfg.rows ? at(out.length) : n;
+          t.c = cfg.rows ? n : at(out.length);
+          out.push(t);
+        }
+      }
+      while (out.length < SIZE) out.push(null);
+
+      // 引用位置有变化才算"动过"（merge 保留的 tile 引用不变，压缩必然换位）
+      for (var j = 0; j < SIZE; j++) {
+        if (seq[j] !== out[j]) { moved = true; break; }
+      }
+      for (var w = 0; w < SIZE; w++) set(n, w, out[w]);
+    }
+
+    if (!moved) return false;
+    return commit(gained, pairs, before);
+  }
+
+  function commit(gained, pairs, before) {
+    var token = ++step;
+
+    history.push({ cells: before, score: score });
+    if (history.length > UNDO_DEPTH) history.shift();
+
+    score += gained;
+    if (score > best) { best = score; store(KEY_BEST, String(best)); }
+
+    var born = spawn(cells);
+
+    // 被吞并的 tile 先滑到合并目标格，动画结束后再淡出
+    pairs.forEach(function (p) { p.eaten.r = p.keep.r; p.eaten.c = p.keep.c; });
+
+    render(pairs, born);
+
+    if (!hinted) { hinted = true; store(KEY_TUTOR, '1'); hideHint(); }
+    bumpScore();
+
+    var justWon = !won && maxValue() >= 2048;
+    if (justWon) {
+      won = true;
+      boardEl.classList.add('board--win');
+      setTimeout(function () { boardEl.classList.add('board--won'); }, 60);
+      setTimeout(function () { boardEl.classList.remove('board--win'); }, 2000);
+    }
+
+    busy = true;
+    setTimeout(function () {
+      if (token !== step) return;   // 期间已重开局/撤销，丢弃这次收尾
+      pairs.forEach(function (p) {
+        var merged = tileNodes.get(p.keep.id);
+        if (merged) {
+          merged.classList.add('tile--merge');
+          setTimeout(function () { merged.classList.remove('tile--merge'); }, 210);
+        }
+        var eaten = tileNodes.get(p.eaten.id);
+        if (eaten) {
+          eaten.classList.add('tile--sinking');
+          setTimeout(function () { dropTile(p.eaten.id); }, 90);
+        }
+      });
+      busy = false;
+      paint();
+      if (won && !winShown) { winShown = true; showWin(); }
+      if (isDead()) { over = true; showOver(); }
+    }, MOVE_MS);
+
+    paint();
+    return true;
+  }
+
+  /* ---------- 撤销 ---------- */
+  function undo() {
+    if (!history.length || busy) return;
+    step++;
+    var s = history.pop();
+    cells = restore(s.cells);
+    score = s.score;
+    over = false;
+    won = maxValue() >= 2048;
+    winShown = won;
+    boardEl.classList.remove('board--won', 'board--win');
+    hideVeils();
+    tileNodes.forEach(function (el) { el.remove(); });
+    tileNodes.clear();
+    render();
+    paint();
+  }
+
+  /* ---------- 渲染 ---------- */
+  function buildTile(t) {
+    var el = document.createElement('div');
+    el.className = 'tile';
+    el.style.setProperty('--x', t.c);
+    el.style.setProperty('--y', t.r);
+    if (t.v >= HOT_FROM) el.classList.add('tile--hot');
+    if (t.fresh) el.classList.add('tile--new');
+
+    var face = document.createElement('div');
+    face.className = 'tile__face ' + classFor(t.v);
+    face.style.setProperty('--tile-fs', fsFor(t.v));
+
+    var num = document.createElement('span');
+    num.textContent = t.v;
+    var exp = document.createElement('span');
+    exp.className = 'tile__exp';
+    exp.textContent = '2' + sup(expOf(t.v));
+    face.appendChild(num);
+    face.appendChild(exp);
+
+    el.appendChild(face);
+    tileNodes.set(t.id, el);
+    tilesEl.appendChild(el);
+    return el;
+  }
+
+  function repaintFace(el, t) {
+    var face = el.firstChild;
+    if (face.childNodes[0].textContent === String(t.v)) return;
+    face.className = 'tile__face ' + classFor(t.v);
+    face.style.setProperty('--tile-fs', fsFor(t.v));
+    face.childNodes[0].textContent = t.v;
+    face.childNodes[1].textContent = '2' + sup(expOf(t.v));
+    if (t.v >= HOT_FROM) el.classList.add('tile--hot');
+    else el.classList.remove('tile--hot');
+  }
+
+  function dropTile(id) {
+    var el = tileNodes.get(id);
+    if (el) { el.remove(); tileNodes.delete(id); }
+  }
+
+  function place(el, r, c) {
+    el.style.setProperty('--x', c);
+    el.style.setProperty('--y', r);
+  }
+
+  // pairs: 本步的合并对，用于让被吞并的 tile 滑到目标格后淡出
+  function render(pairs, born) {
+    var alive = new Set();
+
+    for (var r = 0; r < SIZE; r++) {
+      for (var c = 0; c < SIZE; c++) {
+        var t = cells[r][c];
+        if (!t) continue;
+        alive.add(t.id);
+        var el = tileNodes.get(t.id);
+        if (!el) el = buildTile(t);
+        else { place(el, t.r, t.c); repaintFace(el, t); }
+        t.fresh = false;
+      }
+    }
+
+    // 被吞并的 tile 先跟着滑到合并目标格，保持不透明；
+    // 等动画收尾时再淡出，露出已经变成新数值的目标 tile。
+    (pairs || []).forEach(function (p) {
+      var el = tileNodes.get(p.eaten.id);
+      if (el) {
+        alive.add(p.eaten.id);
+        place(el, p.eaten.r, p.eaten.c);
+      }
+    });
+
+    tileNodes.forEach(function (el, id) {
+      if (!alive.has(id)) { el.remove(); tileNodes.delete(id); }
+    });
+  }
+
+  /* ---------- 顶部数值 ---------- */
+  function paint() {
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+    undoBtn.disabled = (history.length === 0) || busy;
+  }
+  function bumpScore() {
+    scoreBox.classList.remove('score--bump');
+    void scoreBox.offsetWidth;
+    scoreBox.classList.add('score--bump');
+  }
+
+  /* ---------- 弹层 ---------- */
+  function showWin() { winScoreEl.textContent = score; veilWin.classList.add('veil--on'); }
+  function showOver() { overScoreEl.textContent = score; overBestEl.textContent = best; veilOver.classList.add('veil--on'); }
+  function hideVeils() { veilWin.classList.remove('veil--on'); veilOver.classList.remove('veil--on'); }
+  function hideHint() { veilHint.classList.remove('veil--on'); }
+
+  function dismissHint() {
+    if (hinted) return;
+    hinted = true;
+    store(KEY_TUTOR, '1');
+    hideHint();
+  }
+
+  /* ---------- 键盘 ---------- */
+  var KEYMAP = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    w: 'up', s: 'down', a: 'left', d: 'right',
+    W: 'up', S: 'down', A: 'left', D: 'right'
+  };
+  window.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var dir = KEYMAP[e.key];
+    if (!dir) return;
+    e.preventDefault();
+    dismissHint();
+    move(dir);
+  });
+
+  /* ---------- 触屏滑动 ---------- */
+  var tracking = false, tx = 0, ty = 0;
+
+  boardEl.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    tracking = true;
+    tx = e.touches[0].clientX;
+    ty = e.touches[0].clientY;
+  }, { passive: true });
+
+  boardEl.addEventListener('touchmove', function (e) {
+    if (tracking) e.preventDefault();   // 阻止棋盘上的页面滚动
+  }, { passive: false });
+
+  boardEl.addEventListener('touchend', function (e) {
+    if (!tracking) return;
+    tracking = false;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - tx, dy = t.clientY - ty;
+    var adx = Math.abs(dx), ady = Math.abs(dy);
+    dismissHint();
+    if (Math.max(adx, ady) < THRESHOLD) return;
+    move(adx > ady ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+  }, { passive: true });
+
+  boardEl.addEventListener('touchcancel', function () { tracking = false; }, { passive: true });
+
+  /* ---------- 桌面拖拽 ---------- */
+  var dragging = false, mx = 0, my = 0;
+  boardEl.addEventListener('mousedown', function (e) {
+    dragging = true; mx = e.clientX; my = e.clientY;
+  });
+  window.addEventListener('mouseup', function (e) {
+    if (!dragging) return;
+    dragging = false;
+    var dx = e.clientX - mx, dy = e.clientY - my;
+    dismissHint();
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < THRESHOLD) return;
+    move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+  });
+  boardEl.addEventListener('dragstart', function (e) { e.preventDefault(); });
+  boardEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  /* ---------- 按钮 ---------- */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'undo') undo();
+    else if (act === 'new' || act === 'win-new' || act === 'over-new') reset();
+    else if (act === 'win-close') veilWin.classList.remove('veil--on');
+  });
+
+  /* ---------- 字号基准跟随棋盘尺寸 ---------- */
+  function syncBoardSize() {
+    var w = boardEl.getBoundingClientRect().width;
+    if (w) boardEl.style.setProperty('--board-size', w + 'px');
+  }
+  window.addEventListener('resize', syncBoardSize);
+  window.addEventListener('orientationchange', function () { setTimeout(syncBoardSize, 240); });
+
+  /* ---------- 底板刻度格（只建一次） ---------- */
+  function buildSlots() {
+    var frag = document.createDocumentFragment();
+    for (var r = 0; r < SIZE; r++) {
+      for (var c = 0; c < SIZE; c++) {
+        var s = document.createElement('div');
+        s.className = 'slot';
+        s.style.setProperty('--x', c);
+        s.style.setProperty('--y', r);
+        frag.appendChild(s);
+      }
+    }
+    slotsEl.appendChild(frag);
+  }
+
+  /* ---------- 启动 ---------- */
+  best = parseInt(load(KEY_BEST) || '0', 10) || 0;
+  buildSlots();
+  reset();
+  syncBoardSize();
+  requestAnimationFrame(syncBoardSize);
+})();
+</script>
+</body>
+</html>
