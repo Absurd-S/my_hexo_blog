@@ -325,3 +325,14 @@ figure.highlight pre {
 [data-theme='dark'] .skill-track {
     background: #2a2a2a;
 }
+
+/* ===== Tabs — disable slide-up animation when switching languages ===== */
+/* Overrides theme: _tags/tabs.styl `animation: tabshow .5s`.
+   Same specificity as the theme rule, but custom.css loads after /css/index.css. */
+.container .tabs > .tab-contents .tab-item-content.active {
+    -webkit-animation: none;
+    -moz-animation: none;
+    -o-animation: none;
+    -ms-animation: none;
+    animation: none;
+}
